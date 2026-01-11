@@ -148,6 +148,19 @@ class Board:
         if move.promotion:
             self.board[move.end[0]][move.end[1]] = piece[0] + move.promotion
 
+        old_en_passant = self.en_passant_square
+        
+        #update en passant square
+        if piece[1] == "P" and abs(move.start[0] - move.end[0]) == 2:
+            self.en_passant_square = ((move.start[0] + move.end[0]) // 2, move.start[1])
+        else:
+            self.en_passant_square = None
+            
+        #handle en passant capture
+        if piece[1] == "P" and move.end == old_en_passant and old_en_passant is not None:
+            captured_pawn_row = move.start[0]
+            self.board[captured_pawn_row][move.end[1]] = "--"
+
         #Update castle rights
         if piece[1] == "K":
             if piece[0] == "w":

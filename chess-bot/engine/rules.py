@@ -1,3 +1,4 @@
+from engine.move import Move
 class Rules:
     def __init__(self, board):
         self.board = board
@@ -94,3 +95,142 @@ class Rules:
                 self.is_square_attacked(self.board, (row, 3), attacking_color)):
                 return False
             return True
+    #move generation - overall legalmoves
+    def generate_legal_moves(self, color: str):
+        pseudo_legal_moves = self.generate_pseudo_legal_moves(color)
+        legal_moves = []
+        
+        for move in pseudo_legal_moves:
+            self.board.make_move(move)
+            if not self.in_check(color):
+                legal_moves.append(move)
+            self.board.undo_move()
+        return legal_moves
+    #move generation - overall moves
+    def generate_pseudo_legal_moves(self, color: str):
+        moves = []
+        for r in range(8):
+            for c in range(8):
+                piece = self.board.get_piece(r, c)
+                if piece[0] != color[0]:
+                    continue
+                piece_type = piece[1]
+                
+                if piece_type == "P":
+                    moves.extend(self._generate_pawn_moves(r, c, color))
+                elif piece_type == "N":
+                    moves.extend(self._generate_knight_moves(r, c, color))
+                elif piece_type == "B":
+                    moves.extend(self._generate_sliding_moves(r, c, color, self.bishop_directions))
+                elif piece_type == "R":
+                    moves.extend(self._generate_sliding_moves(r, c, color, self.rook_directions))
+                elif piece_type == "Q":
+                    moves.extend(self._generate_sliding_moves(r, c, color, self.queen_directions))
+                elif piece_type == "K":
+                    moves.extend(self._generate_king_moves(r, c, color))
+        return moves
+    #move generation - piece specific
+    def _generate_pawn_moves(self, r, c, color) -> list:
+        moves = []
+        piece = self.board.get_piece(r, c)
+        dir = -1 if color == "w" else 1
+        start_row = 6 if color == "w" else 1
+        prom_row = 0 if color == "w" else 7
+        
+        new_r = r + dir
+        #generate normal advancement
+        if 0 <= new_r < 8:
+            if self.board.get_piece(new_r, c) == "--":
+                if new_r == prom_row:
+                    for prom_piece in ["Q", "R", "N", "B"]:
+                        moves.append(Move((r,c), (new_r,c), piece, promotion=prom_piece))
+                else:
+                    moves.append(Move((r,c), (new_r, c), piece))
+                #generate starting double move
+                if r == start_row and self.board.get_piece(new_r + dir, c) == "--":
+                    moves.append(Move((r,c), (new_r + dir, c), piece))
+            #generate capture to the left
+            if c - 1 >= 0:
+                target_piece = self.board.get_piece(new_r, c-1)
+                if target_piece[0] != color[0] and target_piece[0] != "-":
+                    if new_r == prom_row:
+                        for prom_piece in ["Q", "R", "N", "B"]:
+                            moves.append(Move((r,c), (new_r,c-1), piece, piece_captured=target_piece, promotion=prom_piece))
+                    else:
+                        moves.append(Move((r,c), (new_r, c-1), piece, piece_captured=target_piece))
+            #generate capture to the right
+            if c + 1 < 8:
+                target_piece = self.board.get_piece(new_r, c+1)
+                if target_piece[0] != color[0] and target_piece[0] != "-":
+                    if new_r == prom_row:
+                        for prom_piece in ["Q", "R", "N", "B"]:
+                            moves.append(Move((r,c), (new_r,c+1), piece, piece_captured=target_piece, promotion=prom_piece))
+                    else:
+                        moves.append(Move((r,c), (new_r, c+1), piece, piece_captured=target_piece))
+            #generate en passant
+            for dc in [-1, 1]:
+                if self.board.en_passant_square == (new_r, c + dc):
+                    captured_pawn = "bP" if color == "w" else "wP"
+                    moves.append(Move((r,c), (new_r, c + dc), piece, piece_captured=captured_pawn))
+        return moves
+    def _generate_knight_moves(self, r, c, color) -> list:
+        moves = []
+        piece = self.board.get_piece(r, c)
+        for dr, dc in self.knight_moves:
+            new_r, new_c = r + dr, c + dc
+            if 0 <= new_r < 8 and 0 <= new_c < 8:
+                target_piece = self.board.get_piece(new_r, new_c)
+                if target_piece[0] != color[0]:
+                    moves.append(Move((r,c), (new_r, new_c), piece, piece_captured=target_piece))
+        return moves
+    def _generate_sliding_moves(self, r, c, color, dir) -> list:
+        moves = []
+        piece = self.board.get_piece(r,c)
+        for dr, dc in dir:
+            new_r, new_c = r + dr, c + dc
+            while 0 <= new_r < 8 and 0 <= new_c < 8:
+                target_piece = self.board.get_piece(new_r, new_c)
+                if target_piece == "--":
+                    moves.append(Move((r,c), (new_r, new_c), piece))
+                else:
+                    if target_piece[0] != color[0]:
+                        moves.append(Move((r,c), (new_r, new_c), piece, piece_captured=target_piece))
+                        break
+                new_r += dr
+                new_c += dc
+        return moves
+    def _generate_king_moves(self, r, c, color) -> list:
+        moves = []
+        piece = self.board.get_piece(r, c)
+        for dr, dc in self.king_moves:
+            new_r, new_c = r + dr, c + dc
+            if 0 <= new_r < 8 and 0 <= new_c < 8:
+                target_piece = self.board.get_piece(new_r, new_c)
+                if target_piece[0] != color[0]:
+                    moves.append(Move((r,c), (new_r, new_c), piece, piece_captured=target_piece))
+        if not self.in_check(color):
+            if self.can_castle(color, "K"):
+                king_end_col = 6
+                moves.append(Move((r,c), (r, king_end_col), piece))
+            if self.can_castle(color, "Q"):
+                king_end_col = 2
+                moves.append(Move((r,c), (r, king_end_col), piece))
+        return moves
+    def is_checkmate(self, color:str) -> bool:
+        if not self.in_check(color):
+            return False
+        legal_moves = self.generate_legal_moves(color)
+        if len(legal_moves) == 0:
+            return True
+    def is_stalemate(self, color:str) -> bool:
+        if not self.in_check(color):
+            legal_moves = self.generate_legal_moves(color)
+            if len(legal_moves) == 0:
+                return True
+        return False
+    def is_draw(self, color:str):
+        if self.is_stalemate(color):
+            return True
+        if self.board.halfmove_clock >= 50:
+            return True
+        return False
