@@ -36,6 +36,22 @@ class Board:
         self.fullmoves = 1
         #Used for search and undoing moves
         self.move_stack = []
+    def get_board(self):
+        for r in range(8):
+            for c in range(8):
+                print(self.board[r][c], end=" ")
+            print()
+    def get_move(self, i):
+        if self.move_stack and 0 <= i < len(self.move_stack):
+            last_move = self.move_stack[-i]
+            print(last_move[0])
+            print(last_move[1])
+            print(last_move[2])
+            print()
+    def get_last_five(self):
+        if len(self.move_stack) >= 5:
+            for i in range(1, 6):
+                self.get_move(i)
     def to_fen(self) -> str:
         fen_rows = []
         for row in self.board:
@@ -90,7 +106,7 @@ class Board:
         new_board.white_to_move = self.white_to_move
         new_board.en_passant_square = self.en_passant_square
         new_board.castle_rights = self.castle_rights.copy()
-        new_board.halfmove_clock = self.halfmove_clock
+        new_board.halfmoves = self.halfmoves
         new_board.fullmoves = self.fullmoves
         new_board.move_stack = self.move_stack[:]
         return new_board
@@ -108,8 +124,8 @@ class Board:
         king = "wK" if color == "w" else "bK"
         #Kings typically won't move far from starting until end game
         if king == "wK":
-            for r in range(8, -1, -1):
-                for c in range(8, -1, -1):
+            for r in range(7, -1, -1):
+                for c in range(7, -1, -1):
                     if self.board[r][c] == king:
                         return (r, c)
         else:
@@ -126,9 +142,10 @@ class Board:
             move.piece_captured,
             self.castle_rights.copy(),
             self.en_passant_square,
-            self.halfmove_clock,   
+            self.halfmoves,   
             self.fullmoves
         )
+
         self.move_stack.append(state)
         
         piece = move.moved_piece
@@ -182,9 +199,9 @@ class Board:
                     self.castle_rights["bK"] = False
         
         if piece[1] == "P" or move.piece_captured != "--":
-            self.halfmove_clock = 0
+            self.halfmoves = 0
         else:
-            self.halfmove_clock += 1
+            self.halfmoves += 1
             
         if not self.white_to_move:
             self.fullmoves += 1 
@@ -194,12 +211,27 @@ class Board:
         if not self.move_stack:
             return 
         state = self.move_stack.pop()
-        move, moved_piece, captured_piece, castling_rights, en_passant_square, halfmove_clock, fullmoves = state
+        move, moved_piece, captured_piece, castling_rights, en_passant_square, halfmoves, fullmoves = state
         self.board[move.start[0]][move.start[1]] = moved_piece
         self.board[move.end[0]][move.end[1]] = captured_piece
+        
+        if move.is_castling(moved_piece):
+            color = moved_piece[0]
+            if move.end[1] == 6:
+                self.board[move.end[0]][5] = "--"
+                self.board[move.start[0]][7] = color + "R"
+            elif move.end[1] == 2:
+                self.board[move.end[0]][3] = "--"
+                self.board[move.start[0]][0] = color + "R"
+        
+        if moved_piece[1] == "P" and move.end == en_passant_square and en_passant_square is not None:
+            captured_pawn_row = move.start[0]
+            self.board[captured_pawn_row][move.end[1]] = captured_piece
+            self.board[move.end[0]][move.end[1]] = "--"
+            
         self.castle_rights = castling_rights
         self.en_passant_square = en_passant_square
-        self.halfmove_clock = halfmove_clock
+        self.halfmoves = halfmoves
         self.fullmoves = fullmoves
         
         self.white_to_move = not self.white_to_move

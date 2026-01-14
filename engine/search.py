@@ -42,7 +42,7 @@ class Search:
                 best_score = score
                 best_move = move
             a = max(a, score)
-        print(f"Searched {self.nodes_searched} nodes, evaluated {self.positions_evaluated} positions")
+        print(f"Searched {self.nodes_searched} nodes, evaluated {self.positions_evalled} positions")
         print(f"Best move: {best_move} with score: {best_score}")
         
         return best_move
@@ -89,14 +89,25 @@ class Search:
             return min_score
     def order_moves(self, moves):
         def move_priority(move):
+            r = Rules(self.board)
             score = 0
+
+            # Additional priority for forks and pins
+            if r.is_square_forking(self.board, move):
+                score += 3000
+                counter += 1
+            if r.is_square_pinning(self.board, move):
+                score += 3000
+                counter += 1
             if move.is_capture():
+                
                 target_value = self.evaluator.piece_values.get(move.piece_captured[1], 0)
                 attacker_value = self.evaluator.piece_values.get(move.moved_piece[1], 0)
                 score += 10000 + target_value - attacker_value
             if move.is_promotion():
                 promotion_value = self.evaluator.piece_values.get(move.promotion, 0)
                 score += 5000 + promotion_value
+
             return score
         return sorted(moves, key=move_priority, reverse=True)
     

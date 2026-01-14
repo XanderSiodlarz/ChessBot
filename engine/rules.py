@@ -1,4 +1,5 @@
 from engine.move import Move
+from engine.eval import Evaluator
 class Rules:
     def __init__(self, board):
         self.board = board
@@ -55,6 +56,83 @@ class Rules:
                         if (r+dr, c+dc) == square:
                             return True
         return False
+    def is_square_forking(self, board, move:Move) -> bool:
+        if not self.is_square_attacked(board, move.end, "w" if move.moved_piece[0] == "b" else "b"):
+            piece = move.moved_piece
+            temp_eval = Evaluator()
+            piece_val = temp_eval.piece_values
+            if piece[1] == "P":
+                dir = [(-1, -1), (-1, 1)] if piece[0] == 'w' else [(1, -1), (1, 1)]
+                attacked_pieces = []
+                for dr, dc in dir:
+                    new_r, new_c = move.end[0] + dr, move.end[1] + dc
+                    if 0 <= new_r < 8 and 0 <= new_c < 8:
+                        target_piece = board.get_piece(new_r, new_c)
+                        if target_piece[0] != piece[0] and target_piece[0] != "-":
+                            attacked_pieces.append(target_piece)
+                if len(attacked_pieces) >= 2:
+                    return True
+                return False
+            elif piece[1] == "N":
+                attacked_pieces = []
+                for dr, dc in self.knight_moves:
+                    new_r, new_c = move.end[0] + dr, move.end[1] + dc
+                    if 0 <= new_r < 8 and 0 <= new_c < 8:
+                        target_piece = board.get_piece(new_r, new_c)
+                        if target_piece[0] != piece[0] and target_piece[0] != "-":
+                            attacked_pieces.append(target_piece)
+                if len(attacked_pieces) >= 2:
+                    return True
+                return False
+            elif piece[1] in ["B", "Q", "R"]:
+                direction = []
+                if piece[1] in ["B", "Q"]:
+                    direction += self.bishop_directions
+                if piece[1] in ["R", "Q"]:
+                    direction += self.rook_directions
+                attacked_pieces = []
+                for dr, dc in direction:
+                    nr, nc = move.end[0] + dr, move.end[1] + dc
+                    while 0 <= nr < 8 and 0 <= nc < 8:
+                        target_piece = board.get_piece(nr, nc)
+                        if target_piece != "--":
+                            if target_piece[0] != piece[0]:
+                                attacked_pieces.append(target_piece)
+                            break
+                        nr += dr
+                        nc += dc
+                if len(attacked_pieces) >= 2:
+                    return True
+                return False         
+        return False
+    
+    def is_square_pinning(self, board, move:Move) -> bool:
+        piece = move.moved_piece
+        if piece[1] not in ["B", "Q", "R"]:
+            return False
+        direction = []
+        if piece[1] in ["B", "Q"]:
+            direction += self.bishop_directions
+        if piece[1] in ["R", "Q"]:
+            direction += self.rook_directions
+        for dr, dc in direction:
+            nr, nc = move.end[0] + dr, move.end[1] + dc
+            same_color = False
+            while 0 <= nr < 8 and 0 <= nc < 8:
+                target_piece = board.get_piece(nr, nc)
+                if target_piece != "--":
+                    if target_piece[0] == piece[0]:
+                        if same_color:
+                            break
+                        same_color = True
+                    else:
+                        if same_color and target_piece[1] == "K":
+                            return True
+                        break
+                nr += dr
+                nc += dc
+        return False
+    
     def in_check(self, color:str) -> bool:
         king_pos = self.board.find_king(color)
         if not king_pos:
@@ -195,7 +273,7 @@ class Rules:
                 else:
                     if target_piece[0] != color[0]:
                         moves.append(Move((r,c), (new_r, new_c), piece, piece_captured=target_piece))
-                        break
+                    break
                 new_r += dr
                 new_c += dc
         return moves
